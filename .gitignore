@@ -1,0 +1,36 @@
+# Compilados e objetos
+bin/
+obj/
+*.o
+*.out
+*.exe
+
+# Arquivos de build temporários
+build/
+Makefile.tmp
+
+# IDEs e editores
+.vscode/
+*.swp
+*.swo
+*.user
+*.cache
+*.log
+
+# Saídas do programa
+output_*/
+output_image.png
+*.png
+*.csv
+*.txt
+*.validated
+
+# Arquivo de árvore auxiliar
+estrutura.txt
+tree
+tree.exe
+
+# Bibliotecas baixadas/geradas
+*.a
+*.so
+*.dll
