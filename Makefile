@@ -1,194 +1,304 @@
-# Makefile para Projeto de Processamento de Imagens (SDL3 + image + ttf)
+# =============================================================================
+# MAKEFILE PARA PROJETO DE PROCESSAMENTO DE IMAGENS - C++26
+# =============================================================================
+# 
+# Universidade Pr# Banner de apresentação
+banner:
+	clear
+	@echo "╔══════════════════════════════════════════════════════════════╗"
+	@echo "║               PROJETO PROCESSAMENTO DE IMAGENS               ║"
+	@echo "║                     C++26 com SDL3                          ║"
+	@echo "╠══════════════════════════════════════════════════════════════╣"
+	@echo "║ Universidade Presbiteriana Mackenzie                        ║"
+	@echo "║ Computação Visual - $(shell date +'%Y')                                    ║"
+	@echo "╚══════════════════════════════════════════════════════════════╝"na Mackenzie - Ciência da Computação
+# Disciplina: Computação Visual
+# 
+# Compilação moderna para aplicação de processamento de imagens usando:
+# - C++26 com GCC 15.1.0+
+# - SDL3, SDL3_image, SDL3_ttf
+# - Suporte para modo GUI e headless
+# 
+# Uso:
+#   make                    # Compilar aplicação
+#   make run               # Executar modo GUI
+#   make test IMAGE=path   # Testar com imagem específica
+#   make test-headless     # Testar modo sem GUI
+#   make clean             # Limpar arquivos de build
+#   make help              # Mostrar ajuda completa
+# 
+# =============================================================================
 
-# ==========================
-# DETECÇÃO DE SO / COMPILADOR
-# ==========================
-ifeq ($(OS),Windows_NT)
-    DETECTED_OS := Windows
-else
-    DETECTED_OS := $(shell uname -s)
-endif
+# =============================================================================
+# CONFIGURAÇÕES DO COMPILADOR E FLAGS
+# =============================================================================
 
-EXE_EXT :=
-CXX ?= g++
+# Compiladores
+CXX = g++
+CC = gcc
 
-# ==========================
-# CONFIG GERAL
-# ==========================
-SRCDIR := src
-TINYFDDIR := tinyfiledialogs
-OBJDIR := obj
-BINDIR := bin
-TARGET := $(BINDIR)/processador_imagens$(EXE_EXT)
+# Flags para C++26 com otimizações e avisos essenciais (sem conversions rigorosas)
+CXXFLAGS = -std=c++26 -Wall -Wextra -g -O2 \
+           -Wshadow -Wnon-virtual-dtor \
+           -Wcast-align -Wunused -Woverloaded-virtual \
+           -Wmisleading-indentation -Wduplicated-cond \
+           -Wduplicated-branches -Wlogical-op \
+           -Wnull-dereference -Wformat=2
 
-SOURCES := $(wildcard $(SRCDIR)/*.cpp)
-TINYFD_SOURCES := $(wildcard $(TINYFDDIR)/*.c)
-OBJECTS := $(SOURCES:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
-TINYFD_OBJECTS := $(TINYFD_SOURCES:$(TINYFDDIR)/%.c=$(OBJDIR)/%.o)
+# Flags para arquivos C
+CFLAGS = -Wall -Wextra -g -O2
 
-# Flags base (não sobrescreva depois!)
-CXXFLAGS := -std=c++20 -Wall -Wextra -O2
+# Configurações SDL3 usando pkg-config
+SDL_CFLAGS = $(shell pkg-config --cflags sdl3 sdl3-image sdl3-ttf)
+SDL_LIBS = $(shell pkg-config --libs sdl3 sdl3-image sdl3-ttf)
 
-ifeq ($(DETECTED_OS),Windows)
-    CXXFLAGS += -D_WIN32
-else
-    CXXFLAGS += -D_UNIX
-endif
+# Flags de linking adicionais para compatibilidade
+LDFLAGS = -Wl,-rpath,/usr/local/lib -Wl,--enable-new-dtags
 
-# ==========================
-# SDL (Linux via pkg-config)
-# ==========================
-# Use pkg-config para descobrir cflags/libs das três libs
-PKGCFG   ?= pkg-config
-SDL_PKGS := sdl3 sdl3-image sdl3-ttf
+# =============================================================================
+# ESTRUTURA DE DIRETÓRIOS E ARQUIVOS
+# =============================================================================
 
-ifeq ($(DETECTED_OS),Windows)
-    # Caminhos Windows locais (ajuste conforme seu ambiente, se for compilar nativamente no Windows)
-    INCLUDES := -I"C:/SDL3/include" -Isrc
-    LIBS     := -L"C:/SDL3/lib" -lSDL3 -lSDL3_image -lSDL3_ttf -lm -mwindows
-else
-    # Linux/WSL2: use pkg-config (recomendado)
-    # OBS: se instalou em /usr/local, garanta que o PKG_CONFIG_PATH contenha /usr/local/lib/pkgconfig
-    # export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$$PKG_CONFIG_PATH
-    INCLUDES := -Isrc -I$(TINYFDDIR) $(shell $(PKGCFG) --cflags $(SDL_PKGS))
-    LIBS     := $(shell $(PKGCFG) --libs $(SDL_PKGS)) -lm
-endif
+# Diretórios do projeto
+SRC_DIR = src
+BUILD_DIR = build
+INCLUDE_DIR = include
+ASSETS_DIR = assets
+OUTPUT_DIR = output
 
-# ==========================
-# CROSS-COMPILATION MINGW (opcional no Linux)
-# ==========================
-MINGW_CXX      ?= x86_64-w64-mingw32-g++
-MINGW_INCLUDES := -Isrc -I$(TINYFDDIR)
-# OBS: para cross, é comum precisar dos .pc para o triplo alvo (mingw). Se não tiver,
-# mantenha libs estáticas ou paths locais. Abaixo segue uma linha genérica:
-MINGW_LIBS     := -lSDL3 -lSDL3_image -lSDL3_ttf -lm -static-libgcc -static-libstdc++ -mwindows
+# Localização de dependências externas
+SYSTEM_INCLUDE_DIRS = -I/usr/local/include -I/usr/include/freetype2 -I/usr/include/libpng16
+SYSTEM_LIB_DIRS = -L/usr/local/lib
 
-# ==========================
-# DIRETÓRIOS
-# ==========================
-$(shell mkdir -p $(OBJDIR) $(BINDIR))
+# Arquivos fonte
+SOURCES_CPP = $(wildcard $(SRC_DIR)/*.cpp)
+SOURCES_C = $(wildcard $(SRC_DIR)/*.c)
+OBJECTS_CPP = $(SOURCES_CPP:$(SRC_DIR)/%.cpp=$(BUILD_DIR)/%.o)
+OBJECTS_C = $(SOURCES_C:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
+# Adicionar tinyfiledialogs.c diretamente como objeto
+TINYFD_OBJECT = $(BUILD_DIR)/tinyfiledialogs.o
+ALL_OBJECTS = $(OBJECTS_CPP) $(OBJECTS_C) $(TINYFD_OBJECT)
 
-# ==========================
-# ALVOS
-# ==========================
-.PHONY: all clean run native windows deps-ubuntu deps-fedora deps-arch test install uninstall help
+# Executável principal
+TARGET = $(BUILD_DIR)/main
 
-# Por padrão, compile apenas nativo; o alvo "windows" é opcional
-all: native
+# Arquivo de imagem de teste padrão
+DEFAULT_TEST_IMAGE = $(ASSETS_DIR)/teste1.png
 
-native: $(TARGET)
-	@echo "Compilação nativa concluída! Executável: $(TARGET)"
+# =============================================================================
+# TARGETS PRINCIPAIS
+# =============================================================================
 
-# Alvo para testar rapidamente com uma imagem de exemplo
-test: $(TARGET)
-	@echo "Procurando imagens de exemplo..."
-	@if [ -f "obj/gato1.bmp" ]; then \
-		echo "Testando com obj/gato1.bmp..."; \
-		$(TARGET) obj/gato1.bmp; \
-	elif [ -f "obj/1128858.bmp" ]; then \
-		echo "Testando com obj/1128858.bmp..."; \
-		$(TARGET) obj/1128858.bmp; \
-	elif [ -f "obj/gato1.jpeg" ]; then \
-		echo "Testando com obj/gato1.jpeg..."; \
-		$(TARGET) obj/gato1.jpeg; \
-	else \
-		echo "Nenhuma imagem de teste encontrada em obj/"; \
-		echo "Criando imagem de teste simples..."; \
-		echo "Use: $(TARGET) caminho/para/sua/imagem.{png,jpg,bmp}"; \
-		echo "Ou: $(TARGET) --nogui caminho/para/sua/imagem.{png,jpg,bmp}"; \
-	fi
+# Target padrão: compilar aplicação
+all: banner $(TARGET)
+	clear
+	@echo
+	@echo "✅ Build concluído com sucesso!"
+	@echo "   Executável: $(TARGET)"
+	@echo "   Para testar: make run ou make test IMAGE=caminho/imagem.png"
 
-# Alvo para instalação local (opcional)
-install: $(TARGET)
-	@echo "Instalando $(TARGET) em /usr/local/bin..."
-	@sudo cp $(TARGET) /usr/local/bin/
-	@echo "Instalação concluída! Use: processador_imagens [imagem]"
+# Compilar executável principal
+$(TARGET): $(ALL_OBJECTS) | $(BUILD_DIR)
+	clear
+	@echo "🔗 Linkando executável..."
+	$(CXX) $(ALL_OBJECTS) -o $@ $(SYSTEM_INCLUDE_DIRS) $(SYSTEM_LIB_DIRS) $(SDL_LIBS) $(LDFLAGS)
+	@echo "   Executável criado: $@"
 
-# Alvo para desinstalação
-uninstall:
-	@echo "Removendo processador_imagens de /usr/local/bin..."
-	@sudo rm -f /usr/local/bin/processador_imagens
-	@echo "Desinstalação concluída!"
+# =============================================================================
+# COMPILAÇÃO DE ARQUIVOS OBJETO
+# =============================================================================
 
-# Alvo de ajuda
-help:
-	@echo "Makefile para Processador de Imagens (SDL3)"
-	@echo ""
-	@echo "Alvos disponíveis:"
-	@echo "  all       - Compila o projeto (padrão: native)"
-	@echo "  native    - Compila para o sistema atual"
-	@echo "  windows   - Compilação cruzada para Windows (requer MinGW)"
-	@echo "  test      - Compila e testa com imagem de exemplo"
-	@echo "  run       - Mostra instruções de execução"
-	@echo "  clean     - Remove arquivos objeto e executáveis"
-	@echo "  install   - Instala o executável em /usr/local/bin"
-	@echo "  uninstall - Remove o executável de /usr/local/bin"
-	@echo "  help      - Mostra esta ajuda"
-	@echo ""
-	@echo "Dependências (escolha sua distribuição):"
-	@echo "  deps-ubuntu - Instala dependências no Ubuntu/Debian"
-	@echo "  deps-fedora - Instala dependências no Fedora"
-	@echo "  deps-arch   - Instala dependências no Arch Linux"
-	@echo ""
-	@echo "Uso:"
-	@echo "  make && ./bin/processador_imagens caminho/para/imagem.png"
-	@echo "  make test  # Para teste rápido"
+# Compilar arquivos C++ (.cpp)
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
+	clear
+	@echo "🔨 Compilando C++: $<"
+	$(CXX) $(CXXFLAGS) $(SYSTEM_INCLUDE_DIRS) -I$(INCLUDE_DIR) $(SDL_CFLAGS) -c $< -o $@
 
-# Compilação cruzada para Windows usando MinGW (somente em Linux)
-windows: $(SOURCES)
-ifneq ($(DETECTED_OS),Windows)
-	@if ! which $(MINGW_CXX) > /dev/null; then \
-		echo "[make] Compilador MinGW ($(MINGW_CXX)) não encontrado. Pulando build Windows."; \
-	else \
-		mkdir -p $(OBJDIR)/windows $(BINDIR); \
-		$(MINGW_CXX) $(CXXFLAGS) -D_WIN32 $(MINGW_INCLUDES) $(SOURCES) -o $(BINDIR)/processador_imagens.exe $(MINGW_LIBS); \
-		echo "Compilação Windows concluída! Executável: $(BINDIR)/processador_imagens.exe"; \
-		echo "Copie as DLLs necessárias para o diretório bin (se estiver linkando dinamicamente):"; \
-		echo "  - SDL3.dll"; \
-		echo "  - SDL3_image.dll"; \
-		echo "  - SDL3_ttf.dll"; \
-	fi
-else
-	@echo "Compilação cruzada não suportada no Windows"
-endif
+# Compilar arquivos C (.c)
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
+	clear
+	@echo "🔨 Compilando C: $<"
+	$(CC) $(CFLAGS) $(SYSTEM_INCLUDE_DIRS) -I$(INCLUDE_DIR) $(SDL_CFLAGS) -c $< -o $@
 
-# Link final (nativo)
-$(TARGET): $(OBJECTS)
-	$(CXX) $(OBJECTS) -o $@ $(LIBS)
+# Compilar tinyfiledialogs.c especificamente do diretório include
+$(BUILD_DIR)/tinyfiledialogs.o: $(INCLUDE_DIR)/tinyfiledialogs.c | $(BUILD_DIR)
+	clear
+	@echo "🔨 Compilando biblioteca externa: $<"
+	$(CC) $(CFLAGS) $(SYSTEM_INCLUDE_DIRS) -I$(INCLUDE_DIR) -c $< -o $@
 
-# Regra de compilação dos .cpp
-$(OBJDIR)/%.o: $(SRCDIR)/%.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+# Criar diretório de build se não existir
+$(BUILD_DIR):
+	clear
+	@echo "📁 Criando diretório de build..."
+	mkdir -p $(BUILD_DIR)
 
-# Regra de compilação dos .c (tinyfiledialogs)
-$(OBJDIR)/%.o: $(TINYFDDIR)/%.c
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+# =============================================================================
+# TARGETS DE EXECUÇÃO E TESTE
+# =============================================================================
 
-# Limpeza
-clean:
-	rm -rf $(OBJDIR)/* $(BINDIR)/*
-	@echo "Arquivos limpos!"
-
-# Execução
+# Executar aplicação em modo GUI (sem argumentos)
 run: $(TARGET)
-	@echo "Execute com:"
-	@echo "  Linux/WSL: $(BINDIR)/processador_imagens [imagem]"
-	@echo "  Windows  : $(BINDIR)/processador_imagens.exe [imagem]"
+	clear
+	@echo "🚀 Executando aplicação em modo GUI..."
+	@if [ -f "$(DEFAULT_TEST_IMAGE)" ]; then \
+		echo "   Carregando imagem padrão: $(DEFAULT_TEST_IMAGE)"; \
+		./$(TARGET) $(DEFAULT_TEST_IMAGE); \
+	else \
+		echo "   Executando sem imagem (será solicitada via interface)"; \
+		./$(TARGET); \
+	fi
 
-# Dependências (atenção: no Ubuntu 24.04 os pacotes sdl3-dev podem não existir)
-deps-ubuntu:
-	sudo apt update
-	# Toolchain + utilitários
-	sudo apt install -y build-essential pkg-config cmake ninja-build
-	# Codecs/formatos para SDL_image e TTF
-	sudo apt install -y zlib1g-dev libpng-dev libjpeg-turbo8-dev libwebp-dev libtiff-dev libfreetype6-dev
-	# Backends e gráficos comuns
-	sudo apt install -y libasound2-dev libpulse-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev libpipewire-0.3-dev libwayland-dev libdecor-0-dev
-	@echo "Nota: SDL3/SDL3_image/SDL3_ttf foram instalados via build from source em /usr/local; não há libsdl3-dev oficiais no 24.04."
+# Testar com imagem específica
+# Uso: make test IMAGE=caminho/para/imagem.png [NOGUI=1]
+test: $(TARGET)
+	clear
+	@if [ -z "$(IMAGE)" ]; then \
+		echo "❌ Erro: Especifique uma imagem para teste"; \
+		echo "   Uso: make test IMAGE=caminho/para/imagem.png"; \
+		echo "   Exemplo: make test IMAGE=$(DEFAULT_TEST_IMAGE)"; \
+		echo "   Modo headless: make test IMAGE=imagem.png NOGUI=1"; \
+		exit 1; \
+	elif [ ! -f "$(IMAGE)" ]; then \
+		echo "❌ Erro: Arquivo não encontrado: $(IMAGE)"; \
+		exit 1; \
+	elif [ "$(NOGUI)" = "1" ]; then \
+		echo "🤖 Testando modo headless com: $(IMAGE)"; \
+		./$(TARGET) --nogui $(IMAGE); \
+	else \
+		echo "🖼️  Testando modo GUI com: $(IMAGE)"; \
+		./$(TARGET) $(IMAGE); \
+	fi
 
-deps-fedora:
-	sudo dnf install -y gcc-c++ pkgconf-pkg-config cmake ninja-build \
-		zlib-devel libpng-devel libjpeg-turbo-devel libwebp-devel libtiff-devel freetype-devel
+# Testar modo headless com imagem padrão
+test-headless: $(TARGET)
+	clear
+	@if [ ! -f "$(DEFAULT_TEST_IMAGE)" ]; then \
+		echo "❌ Erro: Imagem de teste não encontrada: $(DEFAULT_TEST_IMAGE)"; \
+		exit 1; \
+	fi
+	@echo "🤖 Testando modo headless com imagem padrão..."
+	./$(TARGET) --nogui $(DEFAULT_TEST_IMAGE)
 
-deps-arch:
-	sudo pacman -S --needed base-devel pkgconf cmake ninja zlib libpng libjpeg-turbo libwebp libtiff freetype2
+# Executar com debugger
+debug: $(TARGET)
+	clear
+	@echo "🐛 Executando com GDB..."
+	@if [ -f "$(DEFAULT_TEST_IMAGE)" ]; then \
+		gdb --args ./$(TARGET) $(DEFAULT_TEST_IMAGE); \
+	else \
+		gdb ./$(TARGET); \
+	fi
+
+# Executar análise de memória com Valgrind
+valgrind: $(TARGET)
+	clear
+	@echo "🔍 Executando análise de memória..."
+	@if [ -f "$(DEFAULT_TEST_IMAGE)" ]; then \
+		valgrind --leak-check=full --show-leak-kinds=all ./$(TARGET) --nogui $(DEFAULT_TEST_IMAGE); \
+	else \
+		echo "❌ Imagem de teste não encontrada para Valgrind"; \
+	fi
+
+# =============================================================================
+# LIMPEZA E MANUTENÇÃO
+# =============================================================================
+
+# Limpar arquivos de build
+clean:
+	clear
+	@echo "🧹 Limpando arquivos de build..."
+	rm -rf $(BUILD_DIR)
+	@echo "   Diretório $(BUILD_DIR) removido"
+
+# Limpeza completa (incluindo arquivos de output)
+clean-all: clean
+	clear
+	@echo "🧹 Limpeza completa..."
+	rm -rf $(OUTPUT_DIR)
+	rm -f output_*.png *.bmp *.jpg
+	find . -name "output_*" -type d -exec rm -rf {} + 2>/dev/null || true
+	@echo "   Arquivos de output removidos"
+
+# =============================================================================
+# INFORMAÇÕES E DIAGNÓSTICOS
+# =============================================================================
+
+# Mostrar informações do sistema
+info:
+	clear
+	@echo "ℹ️  Informações do sistema:"
+	@echo "   Compilador C++: $(shell $(CXX) --version | head -1)"
+	@echo "   Compilador C: $(shell $(CC) --version | head -1)"
+	@echo "   Flags C++: $(CXXFLAGS)"
+	@echo "   SDL3 encontrado: $(shell pkg-config --exists sdl3 && echo 'Sim' || echo 'Não')"
+	@echo "   SDL3_image encontrado: $(shell pkg-config --exists sdl3-image && echo 'Sim' || echo 'Não')"
+	@echo "   SDL3_ttf encontrado: $(shell pkg-config --exists sdl3-ttf && echo 'Sim' || echo 'Não')"
+	@echo "   Diretório atual: $(shell pwd)"
+	@echo "   Arquivos fonte C++: $(words $(SOURCES_CPP)) arquivos"
+	@echo "   Arquivos fonte C: $(words $(SOURCES_C)) arquivos"
+
+# Verificar dependências
+check-deps:
+	clear
+	@echo "🔍 Verificando dependências..."
+	@pkg-config --exists sdl3 || (echo "❌ SDL3 não encontrado" && exit 1)
+	@pkg-config --exists sdl3-image || (echo "❌ SDL3_image não encontrado" && exit 1)
+	@pkg-config --exists sdl3-ttf || (echo "❌ SDL3_ttf não encontrado" && exit 1)
+	@command -v $(CXX) >/dev/null || (echo "❌ $(CXX) não encontrado" && exit 1)
+	@echo "✅ Todas as dependências encontradas"
+
+# Banner de apresentação
+banner:
+	@echo "╔══════════════════════════════════════════════════════════════╗"
+	@echo "║               PROJETO PROCESSAMENTO DE IMAGENS               ║"
+	@echo "║                     C++26 com SDL3                           ║"
+	@echo "╠══════════════════════════════════════════════════════════════╣"
+	@echo "║ Universidade Presbiteriana Mackenzie                         ║"
+	@echo "║ Computação Visual - $(shell date +'%Y')                      ║"
+	@echo "╚══════════════════════════════════════════════════════════════╝"
+
+# Ajuda completa
+help:
+	clear
+	@echo "📖 AJUDA - MAKEFILE PROCESSAMENTO DE IMAGENS"
+	@echo
+	@echo "🎯 TARGETS PRINCIPAIS:"
+	@echo "   make              - Compilar aplicação"
+	@echo "   make all          - Compilar com banner"
+	@echo "   make run          - Executar modo GUI"
+	@echo "   make clean        - Limpar build"
+	@echo
+	@echo "🧪 TARGETS DE TESTE:"
+	@echo "   make test IMAGE=arquivo.png    - Testar com imagem específica"
+	@echo "   make test IMAGE=arquivo.png NOGUI=1  - Testar modo headless"
+	@echo "   make test-headless             - Testar headless com imagem padrão"
+	@echo
+	@echo "🛠️  TARGETS DE DEBUG:"
+	@echo "   make debug        - Executar com GDB"
+	@echo "   make valgrind     - Análise de memória"
+	@echo
+	@echo "ℹ️  TARGETS DE INFORMAÇÃO:"
+	@echo "   make info         - Informações do sistema"
+	@echo "   make check-deps   - Verificar dependências"
+	@echo "   make help         - Esta ajuda"
+	@echo
+	@echo "🧹 TARGETS DE LIMPEZA:"
+	@echo "   make clean        - Limpar arquivos de build"
+	@echo "   make clean-all    - Limpeza completa"
+	@echo
+	@echo "📁 ESTRUTURA:"
+	@echo "   $(SRC_DIR)/          - Código fonte (.cpp, .c)"
+	@echo "   $(INCLUDE_DIR)/      - Headers (.h, .hpp)"
+	@echo "   $(BUILD_DIR)/        - Arquivos compilados"
+	@echo "   $(ASSETS_DIR)/       - Imagens de teste"
+
+# =============================================================================
+# TARGETS ESPECIAIS
+# =============================================================================
+
+# Targets que não correspondem a arquivos
+.PHONY: all run test test-headless debug valgrind clean clean-all info check-deps banner help
+
+# Configurações especiais do Make
+.DEFAULT_GOAL := all
+.SILENT:
