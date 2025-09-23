@@ -5,7 +5,11 @@
  * Contém métodos para carregamento, conversão para escala de cinza, equalização
  * de histograma e salvamento de imagens em diversos formatos.
  * 
- * @author ProjetoCompVisu
+ * @authors
+ *  Heitor Maciel - 10402559
+ *  Vitor Pepe - 10339754
+ *  Vinícius Magno - 10401365
+ *  Kaiki Bellini Barbosa- 10402509
  * @date 2025
  */
 

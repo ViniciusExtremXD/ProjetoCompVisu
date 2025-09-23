@@ -5,7 +5,11 @@
  * Contém implementações das classes Button e GUI para interface interativa
  * de processamento de imagens com visualização de histogramas.
  * 
- * @author ProjetoCompVisu
+ * @authors
+ *  Heitor Maciel - 10402559
+ *  Vitor Pepe - 10339754
+ *  Vinícius Magno - 10401365
+ *  Kaiki Bellini Barbosa- 10402509
  * @date 2025
  */
 

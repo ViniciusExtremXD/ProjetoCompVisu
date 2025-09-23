@@ -6,7 +6,11 @@
  * 1. Modo GUI: Interface gráfica completa para processamento interativo de imagens
  * 2. Modo Headless (--nogui): Processamento automático em lote sem interface gráfica
  * 
- * @authors TODO
+ * @authors
+ *  Heitor Maciel - 10402559
+ *  Vitor Pepe - 10339754
+ *  Vinícius Magno - 10401365
+ *  Kaiki Bellini Barbosa- 10402509
  * @date 2025-09
  */
 

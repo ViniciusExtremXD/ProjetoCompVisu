@@ -5,7 +5,11 @@
  * Contém métodos para cálculo estatístico de histogramas, renderização visual,
  * e exportação de dados em diversos formatos (CSV, PNG, relatórios de texto).
  * 
- * @author ProjetoCompVisu
+ * @authors
+ *  Heitor Maciel - 10402559
+ *  Vitor Pepe - 10339754
+ *  Vinícius Magno - 10401365
+ *  Kaiki Bellini Barbosa- 10402509
  * @date 2025
  */
 
