@@ -308,70 +308,6 @@ Durante a inicialização, o programa lista os drivers de vídeo detectados pelo
 3. **Salvar**: botão "Salvar" ou tecla `S` grava `output_image.png` na raiz
 4. **Histograma**: atualizado em tempo real; a janela exibe a curva atual sobreposta ao histograma original
 
-### Status da GUI
-
-- ✅ Janela principal ajustada ao tamanho da imagem e centralizada
-- ✅ Janela secundária fixa com overlay do histograma original vs. processado
-- ✅ Botões `Abrir`, `Equalizar/Original`, `Salvar` operacionais e com feedback visual
-- ⏳ Pendências recomendadas: refinamento visual (legendas/cores), integração opcional com `tinyfiledialogs`
-
----
-
-## 🧪 Validação e Testes
-
-### Conjunto de comandos de validação
-
-```bash
-# 1. Compilar do zero
-make clean && make
-
-# 2. Validar GUI (exige backend gráfico)
-./build/main assets/teste1.png
-
-# 3. Validar modo headless manualmente
-./build/main --nogui assets/teste1.png
-
-# 4. Rodar suíte automática do modo headless (se disponível)
-./scripts/test_nogui.sh
-```
-
----
-
-## 🔍 Logs e Diagnóstico
-
-- A inicialização SDL mostra drivers disponíveis (ex.: `wayland`, `x11`, `kmsdrm`, `dummy`)
-- Em caso de falha, o programa tenta um fallback `dummy` apenas para permitir `--nogui`
-- O pipeline de salvamento exibe mensagens claras caso PNG/BMP/JPG falhem
-- Script auxiliar `scripts/test_nogui.sh` valida automaticamente a geração de CSV/PNG/stats
-
-### Problemas Conhecidos / Dicas
-
-- Se o texto não aparecer na GUI, assegure-se de ter fontes TTF padrão (`Liberation Sans` ou `Arial`)
-- Em ambientes sem suporte gráfico, utilize `--nogui` ou exporte `SDL_VIDEODRIVER` para um driver suportado
-- Recrie os diretórios `output_<nome>` ao executar novos testes
-- A compilação Windows (`make windows`) é opcional: o Makefile detecta se MinGW + SDL3 estão disponíveis
-
----
-
-## 📈 Status Atual vs. Pendências
-
-| Item | Situação | Observações |
-|------|----------|-------------|
-| Requisitos obrigatórios do enunciado | ✅ Concluídos | GUI, histograma, equalização, salvamento e modo CLI implementados |
-| Documentação | ✅ Atualizada | README revisado com comandos e fluxo de testes |
-| Testes automatizados | 🔄 Parcial | `scripts/test_nogui.sh` cobre modo headless; GUI ainda depende de teste manual |
-| Build Windows | 🔄 Opcional | Makefile detecta ausência de MinGW/SDL3 e orienta instalação |
-| Refinos finais | 🔄 Em aberto | Melhorias visuais na GUI e integração `tinyfiledialogs` ainda planejadas |
-
----
-
-## 🚀 Próximos Passos Sugeridos
-
-- Adicionar filtros extras (borramento, nitidez, detecção de bordas)
-- Automatizar testes com imagens de referência
-- Internacionalização da interface e mensagens
-- Empacotar build Windows com as DLLs necessárias quando o toolchain estiver pronto
-
 ---
 
 ## 📚 Referências
@@ -380,7 +316,3 @@ make clean && make
   * [Moving to C++26: How to Build and Set Up GCC 15.1 on Ubuntu](https://medium.com/@xersendo/moving-to-c-26-how-to-build-and-set-up-gcc-15-1-on-ubuntu-f52cc9173fa0)
 * SDL3 Documentation: [https://wiki.libsdl.org/SDL3/](https://wiki.libsdl.org/SDL3/)
 * Computação Visual - Processamento de Imagens
-
----
-
-**Boa avaliação e bons experimentos! 🎯**
