@@ -1,3 +1,0 @@
-Total de pixels: 12772086
-Média de intensidade: 156.83 (media)
-Desvio padrão: 42.23 (medio)

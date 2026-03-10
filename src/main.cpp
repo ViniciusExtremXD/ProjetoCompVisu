@@ -1,69 +1,128 @@
-#include <iostream>
-#include <string>
+/**
+ * @file main.cpp
+ * @brief Aplicação principal para processamento de imagens com GUI e modo headless
+ * 
+ * Esta aplicação suporta dois modos de execução:
+ * 1. Modo GUI: Interface gráfica completa para processamento interativo de imagens
+ * 2. Modo Headless (--nogui): Processamento automático em lote sem interface gráfica
+ * 
+ * @authors
+ *  Heitor Maciel - 10402559
+ *  Vitor Pepe - 10339754
+ *  Vinícius Magno - 10401365
+ *  Kaiki Bellini Barbosa- 10402509
+ * @date 2025-09
+ */
+
 #include <filesystem>
+#include <iostream>
+#include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_hints.h>
 #include <SDL3/SDL_video.h>
 #include <SDL3_image/SDL_image.h>
-#include "GUI.h"
-#include "Histogram.h"
+
+#include "../include/GUI.h"
+#include "../include/Histogram.h"
 
 namespace {
-struct SDLInitResult {
-    bool initialized{false};
-    bool usedFallback{false};
-    std::string driverName;
+
+/**
+ * @brief Estrutura para armazenar o resultado da inicialização do SDL
+ */
+struct SdlInitializationResult {
+    bool is_initialized{false};
+    bool used_fallback{false};
+    std::string driver_name;
 };
 
-// #########################################
-//            FUNÇÃO: LOGAR DRIVERS DE VÍDEO DISPONÍVEIS
-// #########################################
-void logVideoDrivers() {
-    int count = SDL_GetNumVideoDrivers();
-    if (count < 0) {
-        std::cerr << "[SDL] Não foi possível listar video drivers: " << SDL_GetError() << std::endl;
+/**
+ * @brief Constantes da aplicação
+ */
+namespace constants {
+    constexpr std::string_view NO_GUI_FLAG = "--nogui";
+    constexpr std::string_view OUTPUT_IMAGE_NAME = "output_image.png";
+    constexpr std::string_view DEFAULT_IMAGE_NAME = "imagem";
+    constexpr std::string_view OUTPUT_DIR_PREFIX = "output_";
+    constexpr std::string_view GRAYSCALE_SUFFIX = "_grayscale.png";
+    constexpr std::string_view HISTOGRAM_SUFFIX = "_histograma.csv";
+    constexpr std::string_view STATS_SUFFIX = "_stats.txt";
+    constexpr std::string_view PLOT_SUFFIX = "_histograma.png";
+    constexpr std::string_view ORIGINAL_PREFIX = "_original";
+}
+
+/**
+ * @brief Registra todos os drivers de vídeo SDL disponíveis no sistema
+ * 
+ * Esta função lista todos os drivers de vídeo detectados pelo SDL,
+ * útil para diagnóstico de problemas de inicialização
+ */
+void logAvailableVideoDrivers() noexcept {
+    const int driver_count = SDL_GetNumVideoDrivers();
+    
+    if (driver_count < 0) {
+        std::cerr << "[SDL] Não foi possível listar drivers de vídeo: " 
+                  << SDL_GetError() << '\n';
         return;
     }
-    std::cout << "[SDL] Drivers de vídeo disponíveis (" << count << "):";
-    if (count == 0) {
-        std::cout << " nenhum" << std::endl;
+    
+    std::cout << "[SDL] Drivers de vídeo disponíveis (" << driver_count << "):";
+    
+    if (driver_count == 0) {
+        std::cout << " nenhum\n";
         return;
     }
-    std::cout << std::endl;
-    for (int i = 0; i < count; ++i) {
-        const char* name = SDL_GetVideoDriver(i);
-        std::cout << "  - " << (name ? name : "(desconhecido)") << std::endl;
+    
+    std::cout << '\n';
+    for (int i = 0; i < driver_count; ++i) {
+        const char* driver_name = SDL_GetVideoDriver(i);
+        std::cout << "  - " << (driver_name ? driver_name : "(desconhecido)") << '\n';
     }
 }
 
-// #########################################
-//            FUNÇÃO: INICIALIZAR SDL COM FALLBACK
-// #########################################
-SDLInitResult initializeSDLVideo(Uint32 flags) {
-    SDLInitResult result;
-    logVideoDrivers();
+/**
+ * @brief Inicializa o subsistema de vídeo SDL com fallback para driver dummy
+ * 
+ * Tenta inicializar o SDL com drivers nativos primeiro. Se falhar,
+ * tenta usar o driver "dummy" para permitir operação em modo headless.
+ * 
+ * @param initialization_flags Flags de inicialização do SDL
+ * @return Resultado da inicialização incluindo driver usado e status
+ */
+[[nodiscard]] SdlInitializationResult initializeSdlWithFallback(Uint32 initialization_flags) noexcept {
+    SdlInitializationResult result;
+    logAvailableVideoDrivers();
 
+    // Primeira tentativa: inicialização normal
 #if SDL_VERSION_ATLEAST(3, 0, 0)
-    bool initOk = SDL_Init(flags);
+    const bool init_success = SDL_Init(initialization_flags);
 #else
-    bool initOk = SDL_Init(flags) == 0;
+    const bool init_success = SDL_Init(initialization_flags) == 0;
 #endif
-    if (initOk) {
-        result.initialized = true;
-        const char* driver = SDL_GetCurrentVideoDriver();
-        result.driverName = driver ? driver : "(desconhecido)";
-        std::cout << "[SDL] Inicialização bem-sucedida com driver '" << result.driverName << "'" << std::endl;
+
+    if (init_success) {
+        result.is_initialized = true;
+        const char* current_driver = SDL_GetCurrentVideoDriver();
+        result.driver_name = current_driver ? current_driver : "(desconhecido)";
+        std::cout << "[SDL] Inicialização bem-sucedida com driver '" 
+                  << result.driver_name << "'\n";
         return result;
     }
 
-    std::string firstError = SDL_GetError();
+    // Armazena o primeiro erro para diagnóstico
+    const std::string first_error = SDL_GetError();
     std::cerr << "[SDL] Falha ao inicializar subsistema de vídeo: "
-              << (firstError.empty() ? "(erro não informado)" : firstError) << std::endl;
+              << (first_error.empty() ? "(erro não informado)" : first_error) << '\n';
 
     SDL_Quit();
 
-    // Fallback: tentar driver dummy para permitir modo --nogui
-    std::cout << "[SDL] Tentando fallback com driver 'dummy'..." << std::endl;
+    // Segunda tentativa: fallback com driver dummy
+    std::cout << "[SDL] Tentando fallback com driver 'dummy'...\n";
+    
 #if defined(SDL_HINT_VIDEO_DRIVER)
     SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");
 #elif defined(SDL_HINT_VIDEODRIVER)
@@ -71,228 +130,326 @@ SDLInitResult initializeSDLVideo(Uint32 flags) {
 #endif
 
 #if SDL_VERSION_ATLEAST(3, 0, 0)
-    bool fallbackOk = SDL_Init(flags);
+    const bool fallback_success = SDL_Init(initialization_flags);
 #else
-    bool fallbackOk = SDL_Init(flags) == 0;
+    const bool fallback_success = SDL_Init(initialization_flags) == 0;
 #endif
-    if (fallbackOk) {
-        result.initialized = true;
-        result.usedFallback = true;
-        const char* driver = SDL_GetCurrentVideoDriver();
-        result.driverName = driver ? driver : "dummy";
-        std::cout << "[SDL] Inicialização usando driver de fallback '" << result.driverName << "'." << std::endl;
+
+    if (fallback_success) {
+        result.is_initialized = true;
+        result.used_fallback = true;
+        const char* fallback_driver = SDL_GetCurrentVideoDriver();
+        result.driver_name = fallback_driver ? fallback_driver : "dummy";
+        std::cout << "[SDL] Inicialização usando driver de fallback '" 
+                  << result.driver_name << "'.\n";
     } else {
-        std::string fallbackError = SDL_GetError();
+        const std::string fallback_error = SDL_GetError();
         std::cerr << "[SDL] Falha também no fallback: "
-                  << (fallbackError.empty() ? "(erro não informado)" : fallbackError) << std::endl;
+                  << (fallback_error.empty() ? "(erro não informado)" : fallback_error) << '\n';
     }
 
     return result;
 }
-} // namespace
 
-int main(int argc, char* argv[]) {
-    // Suporta modo sem GUI: ./processador_imagens --nogui caminho
-    if (argc < 2) {
-        std::cerr << "Uso: " << argv[0] << " caminho_da_imagem.ext\n";
-        std::cerr << "  ou: " << argv[0] << " --nogui caminho_da_imagem.ext" << std::endl;
-        return 1;
-    }
-
-    bool noGui = false;
-    std::string imagePath;
-    if (std::string(argv[1]) == "--nogui") {
-        if (argc != 3) {
-            std::cerr << "Uso: " << argv[0] << " --nogui caminho_da_imagem.ext" << std::endl;
-            return 1;
-        }
-        noGui = true;
-        imagePath = argv[2];
-    } else {
-        imagePath = argv[1];
-    }
-
-    // Inicializar SDL (necessário para GUI e parte do pipeline)
-    Uint32 sdlFlags = SDL_INIT_VIDEO | SDL_INIT_EVENTS;
-    SDLInitResult sdlInit = initializeSDLVideo(sdlFlags);
-    if (!sdlInit.initialized) {
-        std::cerr << "Erro crítico: SDL não pôde ser inicializado. Verifique drivers de vídeo ou execute com --nogui." << std::endl;
-        return 1;
-    }
-    if (sdlInit.usedFallback) {
-        std::cerr << "Aviso: driver '" << sdlInit.driverName
-                  << "' não suporta janelas. Modo GUI indisponível nesta execução." << std::endl;
-    }
-
-    // SDL_image 3 não requer inicialização explícita; versões antigas ainda precisam
+/**
+ * @brief Inicializa a biblioteca SDL_image se necessário
+ * 
+ * SDL_image 3.x não requer inicialização explícita, mas versões
+ * anteriores ainda precisam ser inicializadas manualmente.
+ */
+void initializeSdlImage() noexcept {
 #if defined(SDL_IMAGE_VERSION_ATLEAST)
 #if !SDL_IMAGE_VERSION_ATLEAST(3, 0, 0)
-    int imgFlags = IMG_INIT_PNG | IMG_INIT_JPG;
-    if ((IMG_Init(imgFlags) & imgFlags) != imgFlags) {
-        std::cerr << "Aviso: falha ao inicializar SDL_image: " << IMG_GetError() << std::endl;
-        // Não retornamos; tentaremos prosseguir. IMG_Load/IMG_Save* podem falhar se suporte não estiver disponível.
+    constexpr int image_flags = IMG_INIT_PNG | IMG_INIT_JPG;
+    if ((IMG_Init(image_flags) & image_flags) != image_flags) {
+        std::cerr << "Aviso: falha ao inicializar SDL_image: " 
+                  << IMG_GetError() << '\n';
     }
 #endif
 #elif defined(IMG_Init)
-    int imgFlags = IMG_INIT_PNG | IMG_INIT_JPG;
-    if ((IMG_Init(imgFlags) & imgFlags) != imgFlags) {
-        std::cerr << "Aviso: falha ao inicializar SDL_image: " << IMG_GetError() << std::endl;
+    constexpr int image_flags = IMG_INIT_PNG | IMG_INIT_JPG;
+    if ((IMG_Init(image_flags) & image_flags) != image_flags) {
+        std::cerr << "Aviso: falha ao inicializar SDL_image: " 
+                  << IMG_GetError() << '\n';
     }
 #endif
-    // Modo sem GUI: apenas carregar/converter/salvar
-    // #########################################
-    //            FLUXO: MODO HEADLESS (--NOGUI)
-    // #########################################
-    if (noGui) {
-        try {
-            ImageProcessor ip;
-            if (!ip.loadImage(imagePath.c_str())) {
-                std::cerr << "Erro ao carregar imagem em modo --nogui" << std::endl;
-                SDL_Quit();
-                return 1;
-            }
-            // Garante que currentImage está definida (grayscale)
-            if (!ip.getCurrentImage()) {
-                std::cerr << "Imagem atual inválida após processamento" << std::endl;
-                SDL_Quit();
-                return 1;
-            }
-            if (!ip.saveImage("output_image.png")) {
-                std::cerr << "Falha ao salvar output_image.png" << std::endl;
-                SDL_Quit();
-                return 1;
-            }
+}
 
-            Histogram histogramCurrent;
-            histogramCurrent.calculate(ip.getCurrentImage());
-            Histogram histogramOriginal;
-            histogramOriginal.calculate(ip.getOriginalImage());
+/**
+ * @brief Limpa recursos da biblioteca SDL_image se necessário
+ * 
+ * Apenas chama IMG_Quit() para versões que requerem limpeza manual.
+ */
+void cleanupSdlImage() noexcept {
+#if defined(SDL_IMAGE_VERSION_ATLEAST)
+#if !SDL_IMAGE_VERSION_ATLEAST(3, 0, 0)
+    IMG_Quit();
+#endif
+#elif defined(IMG_Quit)
+    IMG_Quit();
+#endif
+}
 
-            if (histogramCurrent.getTotalPixels() > 0) {
-                std::cout << "Histograma (processada): média=" << histogramCurrent.getMean()
-                          << " (" << histogramCurrent.getIntensityClassification()
-                          << ") desvio=" << histogramCurrent.getStdDev()
-                          << " (" << histogramCurrent.getContrastClassification() << ")" << std::endl;
+/**
+ * @brief Salva histograma e dados estatísticos em arquivos de saída
+ * 
+ * @param histogram Histograma calculado da imagem
+ * @param output_directory Diretório de saída
+ * @param base_filename Nome base do arquivo (sem extensão)
+ * @param file_suffix Sufixo adicional para os arquivos
+ */
+void saveHistogramData(const Histogram& histogram, 
+                      const std::filesystem::path& output_directory,
+                      const std::string& base_filename,
+                      const std::string& file_suffix = "") {
+    
+    const std::string filename_prefix = base_filename + file_suffix;
+    
+    // Salvar dados CSV do histograma
+    const auto csv_path = output_directory / (filename_prefix + std::string(constants::HISTOGRAM_SUFFIX));
+    if (histogram.saveCSV(csv_path.string())) {
+        std::cout << "Histograma salvo em: " << csv_path << '\n';
+    } else {
+        std::cerr << "Aviso: falha ao salvar CSV do histograma em " << csv_path << '\n';
+    }
 
-                std::filesystem::path inputPath(imagePath);
-                std::string baseName = inputPath.stem().string();
-                if (baseName.empty()) {
-                    baseName = "imagem";
-                }
+    // Salvar resumo estatístico
+    const auto summary_path = output_directory / (filename_prefix + std::string(constants::STATS_SUFFIX));
+    if (histogram.saveSummary(summary_path.string())) {
+        std::cout << "Resumo estatístico salvo em: " << summary_path << '\n';
+    } else {
+        std::cerr << "Aviso: falha ao salvar resumo do histograma em " << summary_path << '\n';
+    }
 
-                std::filesystem::path outputDir = std::filesystem::path("output_" + baseName);
-                std::error_code ec;
-                std::filesystem::create_directories(outputDir, ec);
-                if (ec) {
-                    std::cerr << "Aviso: não foi possível criar diretório de saída '" << outputDir << "': " << ec.message() << std::endl;
-                } else {
-                    std::filesystem::path csvPath = outputDir / (baseName + "_histograma.csv");
-                    if (histogramCurrent.saveCSV(csvPath.string())) {
-                        std::cout << "Histograma salvo em: " << csvPath << std::endl;
-                    } else {
-                        std::cerr << "Aviso: falha ao salvar CSV do histograma em " << csvPath << std::endl;
-                    }
+    // Salvar imagem do gráfico do histograma
+    const auto plot_path = output_directory / (filename_prefix + std::string(constants::PLOT_SUFFIX));
+    if (histogram.savePlotImage(plot_path.string())) {
+        std::cout << "Imagem do histograma salva em: " << plot_path << '\n';
+    } else {
+        std::cerr << "Aviso: falha ao renderizar o histograma em " << plot_path << '\n';
+    }
+}
 
-                    std::filesystem::path summaryPath = outputDir / (baseName + "_stats.txt");
-                    if (histogramCurrent.saveSummary(summaryPath.string())) {
-                        std::cout << "Resumo estatístico salvo em: " << summaryPath << std::endl;
-                    } else {
-                        std::cerr << "Aviso: falha ao salvar resumo do histograma em " << summaryPath << std::endl;
-                    }
-
-                    std::filesystem::path plotPath = outputDir / (baseName + "_histograma.png");
-                    if (histogramCurrent.savePlotImage(plotPath.string())) {
-                        std::cout << "Imagem do histograma salva em: " << plotPath << std::endl;
-                    } else {
-                        std::cerr << "Aviso: falha ao renderizar o histograma em " << plotPath << std::endl;
-                    }
-
-                    std::filesystem::path pngPath("output_image.png");
-                    if (std::filesystem::exists(pngPath)) {
-                        std::filesystem::path copyPath = outputDir / (baseName + "_grayscale.png");
-                        std::error_code copyEc;
-                        std::filesystem::copy_file(pngPath, copyPath, std::filesystem::copy_options::overwrite_existing, copyEc);
-                        if (!copyEc) {
-                            std::cout << "Imagem em escala de cinza copiada para: " << copyPath << std::endl;
-                        } else {
-                            std::cerr << "Aviso: não foi possível copiar imagem processada: " << copyEc.message() << std::endl;
-                        }
-                    }
-
-                    if (histogramOriginal.getTotalPixels() > 0) {
-                        std::filesystem::path csvOriginal = outputDir / (baseName + "_original_histograma.csv");
-                        if (histogramOriginal.saveCSV(csvOriginal.string())) {
-                            std::cout << "Histograma original salvo em: " << csvOriginal << std::endl;
-                        } else {
-                            std::cerr << "Aviso: falha ao salvar CSV original em " << csvOriginal << std::endl;
-                        }
-
-                        std::filesystem::path summaryOriginal = outputDir / (baseName + "_original_stats.txt");
-                        if (histogramOriginal.saveSummary(summaryOriginal.string())) {
-                            std::cout << "Resumo original salvo em: " << summaryOriginal << std::endl;
-                        } else {
-                            std::cerr << "Aviso: falha ao salvar resumo original em " << summaryOriginal << std::endl;
-                        }
-
-                        std::filesystem::path plotOriginal = outputDir / (baseName + "_original_histograma.png");
-                        if (histogramOriginal.savePlotImage(plotOriginal.string())) {
-                            std::cout << "Imagem do histograma original salva em: " << plotOriginal << std::endl;
-                        } else {
-                            std::cerr << "Aviso: falha ao renderizar o histograma original em " << plotOriginal << std::endl;
-                        }
-                    } else {
-                        std::cerr << "Aviso: não foi possível calcular histograma original da imagem." << std::endl;
-                    }
-                }
-            } else {
-                std::cerr << "Aviso: não foi possível calcular histograma da imagem processada." << std::endl;
-            }
-            std::cout << "Modo --nogui: imagem processada e salva em output_image.png" << std::endl;
-        } catch (const std::exception& e) {
-            std::cerr << "Erro em modo --nogui: " << e.what() << std::endl;
-            SDL_Quit();
+/**
+ * @brief Processa imagem em modo headless (sem interface gráfica)
+ * 
+ * @param image_path Caminho para a imagem de entrada
+ * @return Código de saída (0 = sucesso, 1 = erro)
+ */
+[[nodiscard]] int processImageHeadless(const std::string& image_path) {
+    try {
+        // Carregar e processar imagem
+        ImageProcessor image_processor;
+        if (!image_processor.loadImage(image_path.c_str())) {
+            std::cerr << "Erro ao carregar imagem em modo --nogui\n";
             return 1;
         }
-        // Finaliza SDL_image e SDL (apenas para versões antigas)
-#if defined(SDL_IMAGE_VERSION_ATLEAST)
-#if !SDL_IMAGE_VERSION_ATLEAST(3, 0, 0)
-        IMG_Quit();
-#endif
-#elif defined(IMG_Quit)
-        IMG_Quit();
-#endif
-        SDL_Quit();
-        return 0;
-    }
 
-    if (sdlInit.usedFallback) {
-        std::cerr << "Erro: modo GUI requer um driver de vídeo real. Feche aplicações em headless com --nogui." << std::endl;
-        SDL_Quit();
-        return 1;
-    }
+        // Verificar se a imagem atual foi processada corretamente
+        if (!image_processor.getCurrentImage()) {
+            std::cerr << "Imagem atual inválida após processamento\n";
+            return 1;
+        }
 
-    // #########################################
-    //            FLUXO: MODO GUI COMPLETO
-    // #########################################
-    // Criar e executar GUI
-    try {
-        GUI gui(imagePath);
-        gui.run();
-    } catch (const std::exception& e) {
-        std::cerr << "Erro: " << e.what() << std::endl;
+        // Salvar imagem processada
+        if (!image_processor.saveImage(std::string(constants::OUTPUT_IMAGE_NAME).c_str())) {
+            std::cerr << "Falha ao salvar " << constants::OUTPUT_IMAGE_NAME << '\n';
+            return 1;
+        }
+
+        // Calcular histogramas das imagens processada e original
+        Histogram current_histogram;
+        current_histogram.calculate(image_processor.getCurrentImage());
         
-        SDL_Quit();
+        Histogram original_histogram;
+        original_histogram.calculate(image_processor.getOriginalImage());
+
+        // Processar apenas se o histograma da imagem atual foi calculado com sucesso
+        if (current_histogram.getTotalPixels() > 0) {
+            // Exibir estatísticas do histograma
+            std::cout << "Histograma (processada): média=" << current_histogram.getMean()
+                      << " (" << current_histogram.getIntensityClassification()
+                      << ") desvio=" << current_histogram.getStdDev()
+                      << " (" << current_histogram.getContrastClassification() << ")\n";
+
+            // Preparar diretório de saída
+            const std::filesystem::path input_path(image_path);
+            std::string base_name = input_path.stem().string();
+            if (base_name.empty()) {
+                base_name = std::string(constants::DEFAULT_IMAGE_NAME);
+            }
+
+            const auto output_directory = std::filesystem::path(
+                std::string(constants::OUTPUT_DIR_PREFIX) + base_name
+            );
+
+            std::error_code directory_error;
+            std::filesystem::create_directories(output_directory, directory_error);
+            
+            if (directory_error) {
+                std::cerr << "Aviso: não foi possível criar diretório de saída '" 
+                          << output_directory << "': " << directory_error.message() << '\n';
+                return 1;
+            }
+
+            // Salvar dados do histograma da imagem processada
+            saveHistogramData(current_histogram, output_directory, base_name);
+
+            // Copiar imagem processada para o diretório de saída
+            const std::filesystem::path processed_image_path(constants::OUTPUT_IMAGE_NAME);
+            if (std::filesystem::exists(processed_image_path)) {
+                const auto copy_path = output_directory / (base_name + std::string(constants::GRAYSCALE_SUFFIX));
+                std::error_code copy_error;
+                std::filesystem::copy_file(
+                    processed_image_path, 
+                    copy_path, 
+                    std::filesystem::copy_options::overwrite_existing, 
+                    copy_error
+                );
+                
+                if (!copy_error) {
+                    std::cout << "Imagem em escala de cinza copiada para: " << copy_path << '\n';
+                } else {
+                    std::cerr << "Aviso: não foi possível copiar imagem processada: " 
+                              << copy_error.message() << '\n';
+                }
+            }
+
+            // Processar histograma da imagem original se disponível
+            if (original_histogram.getTotalPixels() > 0) {
+                saveHistogramData(
+                    original_histogram, 
+                    output_directory, 
+                    base_name, 
+                    std::string(constants::ORIGINAL_PREFIX)
+                );
+            } else {
+                std::cerr << "Aviso: não foi possível calcular histograma original da imagem.\n";
+            }
+        } else {
+            std::cerr << "Aviso: não foi possível calcular histograma da imagem processada.\n";
+        }
+
+        std::cout << "Modo --nogui: imagem processada e salva em " 
+                  << constants::OUTPUT_IMAGE_NAME << '\n';
+        return 0;
+
+    } catch (const std::exception& exception) {
+        std::cerr << "Erro em modo --nogui: " << exception.what() << '\n';
+        return 1;
+    }
+}
+
+/**
+ * @brief Exibe informações de uso da aplicação
+ * 
+ * @param program_name Nome do programa (argv[0])
+ */
+void printUsage(const char* program_name) noexcept {
+    std::cerr << "Uso: " << program_name << " caminho_da_imagem.ext\n";
+    std::cerr << "  ou: " << program_name << " --nogui caminho_da_imagem.ext\n";
+}
+
+/**
+ * @brief Analisa argumentos da linha de comando
+ * 
+ * @param argc Número de argumentos
+ * @param argv Array de argumentos
+ * @return Par contendo flag no_gui e caminho da imagem, ou std::nullopt se inválido
+ */
+[[nodiscard]] std::optional<std::pair<bool, std::string>> parseCommandLineArguments(int argc, char* argv[]) {
+    if (argc < 2) {
+        printUsage(argv[0]);
+        return std::nullopt;
+    }
+
+    const std::string_view first_arg(argv[1]);
+    
+    if (first_arg == constants::NO_GUI_FLAG) {
+        if (argc != 3) {
+            std::cerr << "Uso: " << argv[0] << " --nogui caminho_da_imagem.ext\n";
+            return std::nullopt;
+        }
+        return std::make_pair(true, std::string(argv[2]));
+    }
+    
+    return std::make_pair(false, std::string(argv[1]));
+}
+
+} // namespace
+
+/**
+ * @brief Função principal da aplicação
+ * 
+ * Suporta dois modos de execução:
+ * - Modo GUI: Interface gráfica completa
+ * - Modo headless: Processamento em lote sem GUI (--nogui)
+ * 
+ * @param argc Número de argumentos da linha de comando
+ * @param argv Array de argumentos da linha de comando
+ * @return Código de saída (0 = sucesso, 1 = erro)
+ */
+int main(int argc, char* argv[]) {
+    // Analisar argumentos da linha de comando
+    const auto command_args = parseCommandLineArguments(argc, argv);
+    if (!command_args) {
         return 1;
     }
 
-    // Limpar recursos das versões antigas do SDL_image
-#if defined(SDL_IMAGE_VERSION_ATLEAST)
-#if !SDL_IMAGE_VERSION_ATLEAST(3, 0, 0)
-    IMG_Quit();
-#endif
-#elif defined(IMG_Quit)
-    IMG_Quit();
-#endif
-    SDL_Quit();
+    const auto [no_gui_mode, image_path] = *command_args;
+
+    // Inicializar SDL (necessário para GUI e pipeline de processamento)
+    constexpr Uint32 sdl_flags = SDL_INIT_VIDEO | SDL_INIT_EVENTS;
+    const auto sdl_initialization = initializeSdlWithFallback(sdl_flags);
+    
+    if (!sdl_initialization.is_initialized) {
+        std::cerr << "Erro crítico: SDL não pôde ser inicializado. "
+                  << "Verifique drivers de vídeo ou execute com --nogui.\n";
+        return 1;
+    }
+
+    if (sdl_initialization.used_fallback) {
+        std::cerr << "Aviso: driver '" << sdl_initialization.driver_name
+                  << "' não suporta janelas. Modo GUI indisponível nesta execução.\n";
+    }
+
+    // Inicializar SDL_image
+    initializeSdlImage();
+
+    // Criar RAII wrapper para limpeza automática do SDL
+    const auto sdl_cleanup = std::unique_ptr<int, void(*)(int*)>(
+        new int(1), // Dummy object para RAII
+        [](int* ptr) { 
+            delete ptr;
+            cleanupSdlImage();
+            SDL_Quit(); 
+        }
+    );
+
+    // =====================================================
+    // FLUXO: MODO HEADLESS (--NOGUI)
+    // =====================================================
+    if (no_gui_mode) {
+        return processImageHeadless(image_path);
+    }
+
+    // Verificar se GUI é possível
+    if (sdl_initialization.used_fallback) {
+        std::cerr << "Erro: modo GUI requer um driver de vídeo real. "
+                  << "Execute aplicações headless com --nogui.\n";
+        return 1;
+    }
+
+    // =====================================================
+    // FLUXO: MODO GUI COMPLETO
+    // =====================================================
+    try {
+        GUI gui(image_path);
+        gui.run();
+    } catch (const std::exception& exception) {
+        std::cerr << "Erro: " << exception.what() << '\n';
+        return 1;
+    }
+
     return 0;
 }
